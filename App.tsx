@@ -429,7 +429,16 @@ export default function HazaticBar() {
       
       const customerData = await generateText(textPrompt, true);
       
-      const imagePrompt = `A surreal, glitch art style portrait of a character named ${customerData.name || 'Unknown'}. Description: ${customerData.vibe || 'Abstract, white model aesthetic'}. Minimalist, architectural, high contrast, lo-fi texture, dithered shading, white background, digital artifacts.`;
+      // 2. Generate Avatar based on Vibe
+      // Enhanced prompt for consistency with game art style
+      const imagePrompt = `
+        Surreal glitch art portrait of ${customerData.name || 'a character'}.
+        Visual Feature: ${customerData.vibe || 'Abstract geometry, unrendered texture'}.
+        Style: Low-poly, PS1 graphics, wireframe traces, dithered shading, white model aesthetic.
+        Background: Minimalist grey/white void.
+        Mood: Melancholic, digital, disconnected.
+        Quality: High contrast, artistic, lo-fi digital artifacts.
+      `;
       
       const avatarUrl = await generateImage(imagePrompt);
 
@@ -1047,8 +1056,8 @@ export default function HazaticBar() {
     }, 2000);
   };
 
+  // Render methods remain the same as previous, just ensure generateAICustomer uses the new logic
   if (gameState === 'intro') {
-    // ... intro code
     const segment = STORY_SEGMENTS[storyIndex];
     return (
       <BaseContainer glitchEffect={glitchEffect} isFadingOut={isFadingOut} isLoadingAI={isLoadingAI} notification={notification} className="flex flex-col items-center justify-center p-8 transition-all duration-1000">
@@ -1082,7 +1091,6 @@ export default function HazaticBar() {
   }
 
   if (gameState === 'briefing') {
-    // ... briefing code
     return (
       <BaseContainer glitchEffect={glitchEffect} isFadingOut={isFadingOut} isLoadingAI={isLoadingAI} notification={notification} className="flex flex-col items-center justify-center p-8">
          <ArchitecturalCard className="z-10 max-w-lg w-full animate-slideUp">
@@ -1138,7 +1146,6 @@ export default function HazaticBar() {
     );
   }
 
-  // ... prep code remains same ...
   if (gameState === 'prep') {
     const allPrepped = prepItems.ice && prepItems.bottles && prepItems.garnish;
 
@@ -1190,7 +1197,11 @@ export default function HazaticBar() {
     );
   }
 
-  // ... report code remains same ...
+  // Same Report, Hub, Overlays code as before...
+  // Just ensuring generateAICustomer is updated.
+  // ... (Full rest of file is preserved in the context of the running app, I only need to output the full file content if I'm replacing it)
+  // Since I provided the full file content in the change block, I will include the rest of the component logic to ensure it's complete.
+  
   if (gameState === 'report') {
     const totalScore = sessionLog.reduce((acc, curr) => acc + curr.score + (curr.tip || 0), 0);
     const grade = totalScore > 150 ? "S" : totalScore > 80 ? "A" : "B";
@@ -1295,7 +1306,6 @@ export default function HazaticBar() {
     );
   }
 
-  // --- Main Render ---
   return (
     <BaseContainer glitchEffect={glitchEffect} isFadingOut={isFadingOut} isLoadingAI={isLoadingAI} notification={notification}>
       <header className="fixed top-0 w-full px-4 py-3 md:px-6 md:py-6 flex justify-between items-center z-10 bg-[#d4d4d4]/90 backdrop-blur-md border-b border-white/30 shadow-sm">
@@ -1342,7 +1352,6 @@ export default function HazaticBar() {
 
       <main className="pt-20 md:pt-28 pb-32 px-4 md:px-6 max-w-4xl mx-auto min-h-screen flex flex-col justify-center relative z-10">
         
-        {/* ... Radio ... */}
         {!activeCustomer && (
            <div className="absolute left-4 bottom-24 md:left-8 md:bottom-8 z-20 animate-fadeIn">
               <div className={`bg-[#e0e0e0] rounded-sm border border-white/50 shadow-[4px_4px_8px_#bebebe,-4px_-4px_8px_#ffffff] p-3 md:p-4 flex flex-col gap-3 transition-all duration-500 ${showRadio ? 'w-56 md:w-64' : 'w-12 md:w-14'}`}>
@@ -1367,7 +1376,6 @@ export default function HazaticBar() {
                           </button>
                       </div>
 
-                      {/* NEW: Volume Slider */}
                       <div className="flex items-center gap-2 mb-2 px-1">
                          <div className="text-[8px] text-gray-500 font-mono font-bold tracking-widest whitespace-nowrap">SIGNAL GAIN</div>
                          <input 
@@ -1405,11 +1413,9 @@ export default function HazaticBar() {
            </div>
         )}
 
-        {/* ... Hub Content ... */}
         <div className="flex-1 flex flex-col items-center justify-center relative mb-8 md:mb-12">
           {activeCustomer ? (
             <ArchitecturalCard className="w-full max-w-lg animate-slideUp transition-all duration-500 group hover:shadow-[12px_12px_24px_#bebebe,-12px_-12px_24px_#ffffff]">
-              {/* ... Avatar & Name ... */}
               <div className="absolute -top-10 md:-top-14 left-1/2 transform -translate-x-1/2 w-20 h-20 md:w-28 md:h-28 rounded-full bg-[#e0e0e0] shadow-[6px_6px_12px_#bebebe,-6px_-6px_12px_#ffffff] border-4 border-[#d4d4d4] flex items-center justify-center z-20 relative overflow-hidden">
                  {activeCustomer.avatar ? (
                     <img src={activeCustomer.avatar} alt={activeCustomer.name} className="w-full h-full object-cover hazatic-image opacity-90" />
@@ -1439,7 +1445,6 @@ export default function HazaticBar() {
                     </div>
                 )}
                 
-                {/* ... Chatting UI ... */}
                 {gameState === 'chatting' ? (
                    <div className="space-y-4 md:space-y-6 min-h-[150px] md:min-h-[200px] flex flex-col items-center justify-center">
                       <div className="w-full px-4 mb-2">
@@ -1519,7 +1524,6 @@ export default function HazaticBar() {
                       )}
                    </div>
                 ) : gameState === 'serving' ? (
-                   // ... Serving UI ...
                    <div className="space-y-6 md:space-y-8 animate-fadeIn">
                       {generatedDrink && (
                         <div className={`bg-[#e5e5e5]/60 p-4 md:p-6 rounded-sm border border-white/70 shadow-[inset_2px_2px_5px_rgba(0,0,0,0.05)] relative overflow-hidden ${glitchEffect ? 'animate-pulse' : ''} ${!lastDrinkSuccess ? 'border-gray-400 bg-gray-300/30' : ''}`}>
@@ -1624,7 +1628,6 @@ export default function HazaticBar() {
               )}
             </ArchitecturalCard>
           ) : (
-             // ... Empty Bar State ...
              <div className="text-center text-gray-500 flex flex-col items-center gap-6 md:gap-8">
                <div className="relative p-6 md:p-8 rounded-full bg-[#e0e0e0] shadow-[inset_8px_8px_16px_#bebebe,inset_-8px_-8px_16px_#ffffff] border border-white/40">
                  <Moon className="w-16 h-16 md:w-20 md:h-20 mx-auto opacity-20 relative z-10 text-[#3a3a3a]" strokeWidth={1} />
@@ -1689,7 +1692,6 @@ export default function HazaticBar() {
 
       </main>
 
-      {/* ... Navigation Bar ... */}
       <div className="fixed bottom-0 left-0 w-full bg-[#d4d4d4]/90 backdrop-blur-md border-t border-white/40 shadow-lg z-30 pb-safe">
         <div className="max-w-xl mx-auto grid grid-cols-4 gap-2 p-2">
             <button 
@@ -1728,7 +1730,6 @@ export default function HazaticBar() {
         </div>
       </div>
 
-      {/* ... Recipe Book Modal ... */}
       {showRecipeBook && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 md:p-6">
           <ArchitecturalCard className="w-full h-full md:h-[85vh] md:max-w-3xl flex flex-col p-0 overflow-hidden animate-fadeInUp">
@@ -1835,7 +1836,6 @@ export default function HazaticBar() {
         </div>
       )}
 
-      {/* ... Mixing Overlay ... */}
       {gameState === 'mixing' && (
         <div className="fixed inset-0 z-40 bg-[#d4d4d4]/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 md:p-8">
            {isLoadingAI ? (
@@ -1909,7 +1909,6 @@ export default function HazaticBar() {
         </div>
       )}
 
-      {/* ... ABV Select ... */}
       {gameState === 'abv_select' && selectedDrinkForAbv && (
         <div className="fixed inset-0 z-40 bg-[#d4d4d4]/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 md:p-8">
             <div className="w-full max-w-lg text-center relative z-10 animate-fadeIn pb-20">
@@ -1954,7 +1953,6 @@ export default function HazaticBar() {
         </div>
       )}
 
-      {/* ... Custom Mixing ... */}
       {gameState === 'custom_mixing' && (
         <div className="fixed inset-0 z-40 bg-[#d4d4d4]/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 md:p-8">
           <div className="w-full max-w-3xl relative z-10 animate-fadeIn flex flex-col h-full max-h-[90vh]">
@@ -2043,7 +2041,6 @@ export default function HazaticBar() {
         </div>
       )}
 
-      {/* ... Dream Mixing ... */}
       {gameState === 'dream_mixing' && (
         <div className="fixed inset-0 z-40 bg-[#d4d4d4]/95 backdrop-blur-xl flex flex-col items-center justify-start md:justify-center p-4 md:p-8 overflow-y-auto">
           <div className="w-full max-w-xl relative z-10 animate-fadeIn pb-24 mt-12 md:mt-0">
@@ -2086,7 +2083,6 @@ export default function HazaticBar() {
         </div>
       )}
 
-      {/* ... Shop ... */}
       {gameState === 'shop' && (
         <div className="fixed inset-0 z-50 bg-[#d4d4d4]/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-6">
           <ArchitecturalCard className="w-full h-full md:h-[85vh] md:max-w-3xl flex flex-col p-0 overflow-hidden animate-fadeInUp">
@@ -2165,7 +2161,6 @@ export default function HazaticBar() {
         </div>
       )}
 
-      {/* Mission Log Overlay */}
       {showMissionLog && (
         <div className="fixed inset-0 z-50 bg-[#d4d4d4]/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-6">
           <ArchitecturalCard className="w-full max-w-lg animate-fadeInUp">

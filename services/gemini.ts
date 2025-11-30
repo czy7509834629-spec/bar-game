@@ -56,23 +56,31 @@ export const generateText = async (prompt: string, isJSON: boolean = false) => {
 export const generateImage = async (prompt: string): Promise<string | null> => {
   return retryOperation(async () => {
     try {
-      // Using imagen-4.0-generate-001 for image generation via SDK
-      const response = await ai.models.generateImages({
-          model: 'imagen-4.0-generate-001',
-          prompt: prompt,
+      // Using gemini-2.5-flash-image for generation via generateContent
+      const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: {
+            parts: [{ text: prompt }]
+          },
           config: {
-            numberOfImages: 1,
-            aspectRatio: '1:1',
-            outputMimeType: 'image/jpeg'
+            imageConfig: {
+              aspectRatio: '1:1',
+            }
           },
       });
 
-      // Extract base64
-      const base64 = response.generatedImages?.[0]?.image?.imageBytes;
+      // Extract image part
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData && part.inlineData.data) {
+             const base64 = part.inlineData.data;
+             const mimeType = part.inlineData.mimeType || 'image/png';
+             return `data:${mimeType};base64,${base64}`;
+          }
+        }
+      }
       
-      if (!base64) throw new Error("No image generated");
-      
-      return `data:image/jpeg;base64,${base64}`;
+      throw new Error("No image data found in response");
     } catch (error) {
       console.error("AI Image Generation Failed:", error);
       return null; 
