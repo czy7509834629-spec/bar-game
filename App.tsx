@@ -4,7 +4,8 @@ import {
   CheckCircle2, Loader2, Beaker, Plus, FileText, TrendingUp, Trophy, 
   MessageSquare, Eye, RotateCcw, Gauge, Coins, Zap, Activity, 
   Terminal, Box, Radio, Signal, MessageCircle, User, BrainCircuit, ShoppingCart, Lock, Info, ArrowLeft,
-  Droplets, AlertTriangle, Database, ClipboardList, CheckSquare, Gift, Wifi, Anchor, Power, Volume2, VolumeX, LogOut
+  Droplets, AlertTriangle, Database, ClipboardList, CheckSquare, Gift, Wifi, Anchor, Power, Volume2, VolumeX, LogOut,
+  Wine
 } from 'lucide-react';
 
 import { 
@@ -20,7 +21,7 @@ import {
 import { generateText, generateImage } from './services/gemini';
 import { 
   ArchitecturalCard, ArchitecturalButton, BaseContainer, 
-  GlitchBorder, VisualLoader
+  GlitchBorder, VisualLoader, CheersOverlay
 } from './components/UI';
 
 const STORAGE_KEY = 'hazatic_bar_save_v1';
@@ -54,6 +55,11 @@ export default function HazaticBar() {
   const [closingLine, setClosingLine] = useState<string | null>(null);
   const [earnedTip, setEarnedTip] = useState(0);
   const [lastDrinkSuccess, setLastDrinkSuccess] = useState(false); 
+  
+  // Shot Interaction State
+  const [hasOfferedShot, setHasOfferedShot] = useState(false);
+  const [showCheersAnim, setShowCheersAnim] = useState(false);
+  const [shotOutcome, setShotOutcome] = useState<{msg: string, bonus: number} | null>(null);
 
   // Conversation/Chatting State
   const [inquiries, setInquiries] = useState<Inquiry[] | null>(null);
@@ -493,10 +499,10 @@ export default function HazaticBar() {
         Options Style: 
         1. Empathetic (Safe)
         2. Analytical (Neutral)
-        3. Intrusive (Risky)
+        3. Intrusive (Risky) - This option should challenge the customer's reality.
         
         Language: Simplified Chinese.
-        Output JSON: { "questions": [ { "text": "...", "type": "personal" | "lore" | "glitch" }, ... ] }
+        Output JSON: { "questions": [ { "text": "...", "type": "personal" | "lore" | "glitch" | "risk" }, ... ] }
       `;
       
       const result = await generateText(prompt, true);
@@ -507,7 +513,8 @@ export default function HazaticBar() {
       // Fallback Inquiries when API fails (Offline Mode)
       setInquiries([
         { id: 'fb1', text: "信号似乎不太好... (Signal Weak)", type: 'glitch' },
-        { id: 'fb2', text: "稍微休息一下吧。 (Rest)", type: 'personal' }
+        { id: 'fb2', text: "稍微休息一下吧。 (Rest)", type: 'personal' },
+        { id: 'fb3', text: "试图触碰其数据核心... (Touch Core)", type: 'risk' }
       ]);
       setGameState('chatting');
     } finally {
@@ -534,7 +541,7 @@ export default function HazaticBar() {
         
         Mechanics:
         - Stability represents the structural integrity of the customer's mind/avatar.
-        - Personal/intrusive questions might lower stability but reveal deeper lore.
+        - "Risk" type or intrusive questions have a high chance of LOWERING stability (-10 to -20), but may reveal deeper lore.
         - Empathetic/glitch-aligned questions might raise stability.
         - If Stability is low (<30%), speech becomes glitchy/corrupted.
         
@@ -946,6 +953,61 @@ export default function HazaticBar() {
     });
   };
 
+  // --- SHOT MECHANIC ---
+  const handleInviteShot = () => {
+    playUiSound('click');
+    setHasOfferedShot(true);
+
+    // Visual Trigger
+    setShowCheersAnim(true);
+    setTimeout(() => setShowCheersAnim(false), 2000); // Allow time for animation
+
+    let outcomeMsg = "";
+    let bonusData = 0;
+
+    if (lastDrinkSuccess) {
+        // Celebration Shot
+        bonusData = 30;
+        playUiSound('success');
+        outcomeMsg = "共饮成功！数据流更加顺畅了。 (Celebration: Sync Rate Up)";
+        setConnectionStability(prev => Math.min(100, prev + 10));
+    } else {
+        // Apology Shot
+        const accepted = Math.random() > 0.4; // 60% chance to accept
+        if (accepted) {
+            bonusData = 15;
+            playUiSound('success');
+            outcomeMsg = "对方接受了赔罪。气氛缓和。 (Apology Accepted)";
+            setConnectionStability(prev => Math.min(100, prev + 5));
+        } else {
+            bonusData = 0;
+            playUiSound('error');
+            outcomeMsg = "对方拒绝了。 (Request Denied)";
+            setConnectionStability(prev => Math.max(0, prev - 10));
+        }
+    }
+
+    setShotOutcome({ msg: outcomeMsg, bonus: bonusData });
+
+    // Apply Economy
+    if (bonusData > 0) {
+        const finalBonus = upgrades.doubleData ? bonusData * 2 : bonusData;
+        setDataFragments(prev => prev + finalBonus);
+        
+        // Update Tip in Log
+        setSessionLog(prev => {
+            const newLog = [...prev];
+            if (newLog.length > 0) {
+                const lastEntry = newLog[newLog.length - 1];
+                lastEntry.tip = (lastEntry.tip || 0) + finalBonus;
+            }
+            return newLog;
+        });
+        
+        updateMissionProgress('tip_earn', finalBonus);
+    }
+  };
+
   const nextCustomer = () => {
     playUiSound('click');
     setCustomersServed(prev => prev + 1);
@@ -962,6 +1024,10 @@ export default function HazaticBar() {
     setDreamPrompt(""); 
     setConnectionStability(50); // Reset
     
+    // Reset Shot State
+    setHasOfferedShot(false);
+    setShotOutcome(null);
+    
     setInquiries(null);
     setConversationHistory([]);
     setCurrentChatResponse(null);
@@ -976,9 +1042,10 @@ export default function HazaticBar() {
      setClosingLine(null);
      setEarnedTip(0);
      setSelectedDrinkForAbv(null);
+     setHasOfferedShot(false);
+     setShotOutcome(null);
   };
   
-  // Back button for custom mixing: preserves state, just changes view
   const handleCustomBack = () => {
     playUiSound('click');
     setGameState('mixing');
@@ -1049,6 +1116,8 @@ export default function HazaticBar() {
       setCurrentChatResponse(null);
       setActiveMissions([]);
       setConnectionStability(50);
+      setHasOfferedShot(false);
+      setShotOutcome(null);
       
       setStoryIndex(0);
       setGameState('intro');
@@ -1056,7 +1125,8 @@ export default function HazaticBar() {
     }, 2000);
   };
 
-  // Render methods remain the same as previous, just ensure generateAICustomer uses the new logic
+  // Render methods
+  
   if (gameState === 'intro') {
     const segment = STORY_SEGMENTS[storyIndex];
     return (
@@ -1197,10 +1267,7 @@ export default function HazaticBar() {
     );
   }
 
-  // Same Report, Hub, Overlays code as before...
-  // Just ensuring generateAICustomer is updated.
-  // ... (Full rest of file is preserved in the context of the running app, I only need to output the full file content if I'm replacing it)
-  // Since I provided the full file content in the change block, I will include the rest of the component logic to ensure it's complete.
+  // Report and Hub are standard...
   
   if (gameState === 'report') {
     const totalScore = sessionLog.reduce((acc, curr) => acc + curr.score + (curr.tip || 0), 0);
@@ -1308,6 +1375,8 @@ export default function HazaticBar() {
 
   return (
     <BaseContainer glitchEffect={glitchEffect} isFadingOut={isFadingOut} isLoadingAI={isLoadingAI} notification={notification}>
+      {showCheersAnim && <CheersOverlay />}
+      
       <header className="fixed top-0 w-full px-4 py-3 md:px-6 md:py-6 flex justify-between items-center z-10 bg-[#d4d4d4]/90 backdrop-blur-md border-b border-white/30 shadow-sm">
         <div className="flex flex-col items-start relative">
           <div className="h-8 md:h-12 mb-1 flex items-center relative gap-4">
@@ -1324,14 +1393,6 @@ export default function HazaticBar() {
              <div className="flex items-center gap-2 md:gap-3 px-3 py-1 md:px-5 md:py-2 bg-[#e0e0e0] rounded-sm shadow-[inset_2px_2px_4px_#bebebe,inset_-2px_-2px_4px_#ffffff] mb-1 relative overflow-hidden border border-white/50">
                <TrendingUp size={14} className="text-gray-500 opacity-80" />
                <span className="text-xs md:text-sm font-mono relative z-10 text-[#3a3a3a] font-bold">{dataFragments} MB</span>
-               
-               <button 
-                  onClick={toggleBgm}
-                  className="ml-2 pl-2 border-l border-gray-400/30 text-gray-500 hover:text-gray-800 transition-colors"
-                  title="Toggle Ambient Audio"
-               >
-                  {isBgmPlaying ? <Volume2 size={14} /> : <VolumeX size={14} />}
-               </button>
              </div>
              
              <button 
@@ -1573,6 +1634,16 @@ export default function HazaticBar() {
                             <p className="text-xl md:text-2xl font-serif italic text-[#4a4a4a] relative z-10 drop-shadow-sm">"{feedback}"</p>
                          </div>
                       )}
+                      
+                      {/* Shot Outcome Message */}
+                      {shotOutcome && (
+                        <div className="animate-fadeInUp p-3 bg-white/50 rounded-sm border border-gray-300/50 text-center">
+                            <p className="text-xs text-[#3a3a3a] font-bold tracking-wide">{shotOutcome.msg}</p>
+                            {shotOutcome.bonus > 0 && (
+                                <p className="text-[10px] text-green-600 font-mono mt-1 font-bold">BONUS: +{upgrades.doubleData ? shotOutcome.bonus * 2 : shotOutcome.bonus} MB</p>
+                            )}
+                        </div>
+                      )}
 
                    </div>
                 ) : (
@@ -1616,6 +1687,19 @@ export default function HazaticBar() {
                                   <RotateCcw size={16} className="relative z-10 opacity-70" /> 重试 RETRY
                                 </ArchitecturalButton>
                            )}
+                           
+                           {/* Invite Shot Button - Appears if closing line is shown and hasn't offered yet */}
+                           {closingLine && !hasOfferedShot && (
+                               <ArchitecturalButton
+                                  onClick={handleInviteShot}
+                                  className={`flex-1 ${lastDrinkSuccess ? 'border-green-600 text-green-800 bg-green-50' : 'border-purple-600 text-purple-800 bg-purple-50'}`}
+                                  variant="secondary"
+                               >
+                                  <Wine size={16} className="relative z-10 opacity-70" /> 
+                                  {lastDrinkSuccess ? "邀请共饮 (Celebration)" : "赔罪一杯 (Apology)"}
+                               </ArchitecturalButton>
+                           )}
+
                            <ArchitecturalButton 
                               onClick={nextCustomer}
                               className="flex-1"
@@ -1628,6 +1712,7 @@ export default function HazaticBar() {
               )}
             </ArchitecturalCard>
           ) : (
+             // HUB VIEW (Empty Bar)
              <div className="text-center text-gray-500 flex flex-col items-center gap-6 md:gap-8">
                <div className="relative p-6 md:p-8 rounded-full bg-[#e0e0e0] shadow-[inset_8px_8px_16px_#bebebe,inset_-8px_-8px_16px_#ffffff] border border-white/40">
                  <Moon className="w-16 h-16 md:w-20 md:h-20 mx-auto opacity-20 relative z-10 text-[#3a3a3a]" strokeWidth={1} />
@@ -1692,6 +1777,11 @@ export default function HazaticBar() {
 
       </main>
 
+      {/* FOOTER & OVERLAYS... (Keeping rest of the file intact, only showing relevant overlay logic above in BaseContainer) */}
+      
+      {/* ... [Overlays for Recipe, Shop, Mixing etc are same as previous] ... */}
+      
+      {/* ... (Include Recipe Book, Shop, Mixing Overlays here - they are unchanged logic wise, just rendered below) ... */}
       <div className="fixed bottom-0 left-0 w-full bg-[#d4d4d4]/90 backdrop-blur-md border-t border-white/40 shadow-lg z-30 pb-safe">
         <div className="max-w-xl mx-auto grid grid-cols-4 gap-2 p-2">
             <button 
@@ -1730,6 +1820,7 @@ export default function HazaticBar() {
         </div>
       </div>
 
+      {/* OVERLAYS */}
       {showRecipeBook && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 md:p-6">
           <ArchitecturalCard className="w-full h-full md:h-[85vh] md:max-w-3xl flex flex-col p-0 overflow-hidden animate-fadeInUp">

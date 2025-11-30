@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrainCircuit, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, AlertTriangle, Wine } from 'lucide-react';
 
 export const VisualLoader = ({ message }: { message: string }) => (
   <div className="flex flex-col items-center justify-center gap-6 p-8 animate-fadeIn">
@@ -54,6 +54,20 @@ export const GlitchOverlay = () => (
 export const GlitchBorder = () => (
   <div className="absolute -inset-[1px] pointer-events-none rounded-sm z-0">
     <div className="absolute inset-0 rounded-sm bg-gradient-to-r from-transparent via-gray-300/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"></div>
+  </div>
+);
+
+export const CheersOverlay = () => (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-fadeIn pointer-events-none">
+    <div className="relative flex flex-col items-center">
+      <div className="flex gap-4">
+        <Wine className="w-24 h-24 md:w-32 md:h-32 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-clink-left" strokeWidth={1.5} />
+        <Wine className="w-24 h-24 md:w-32 md:h-32 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-clink-right -scale-x-100" strokeWidth={1.5} />
+      </div>
+      <h2 className="text-4xl md:text-6xl font-bold text-white tracking-[0.5em] mt-8 animate-zoom-in drop-shadow-md">
+        CHEERS
+      </h2>
+    </div>
   </div>
 );
 
@@ -115,12 +129,32 @@ export const BaseContainer: React.FC<{children: React.ReactNode, className?: str
           @keyframes spin-reverse {
             from { transform: rotate(360deg); } to { transform: rotate(0deg); }
           }
+          @keyframes clink-left {
+            0% { transform: translateX(-50px) rotate(-15deg); opacity: 0; }
+            50% { transform: translateX(0) rotate(0deg); opacity: 1; }
+            70% { transform: rotate(10deg); }
+            100% { transform: translateX(0) rotate(0deg); opacity: 1; }
+          }
+          @keyframes clink-right {
+            0% { transform: translateX(-50px) rotate(-15deg) scaleX(-1); opacity: 0; }
+            50% { transform: translateX(0) rotate(0deg) scaleX(-1); opacity: 1; }
+            70% { transform: rotate(10deg) scaleX(-1); }
+            100% { transform: translateX(0) rotate(0deg) scaleX(-1); opacity: 1; }
+          }
+          @keyframes zoom-in {
+            0% { transform: scale(0.5); opacity: 0; }
+            60% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+          }
           .animate-spin-reverse { animation: spin-reverse linear infinite; }
           .animate-fadeIn { animation: fadeIn 0.8s ease-out forwards; }
           .animate-slideUp { animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
           .animate-fadeOutToBlack { animation: fadeOutToBlack 2s ease-in-out forwards; }
           .animate-glitch { animation: glitch 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite; }
           .animate-shimmer { background-size: 200% 100%; animation: shimmer 2s infinite linear; }
+          .animate-clink-left { animation: clink-left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+          .animate-clink-right { animation: clink-right 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+          .animate-zoom-in { animation: zoom-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
           .scrollbar-thin::-webkit-scrollbar { width: 6px; }
           .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #a0a0a0; border-radius: 3px; }
           .scrollbar-track-transparent::-webkit-scrollbar-track { background-color: transparent; }
