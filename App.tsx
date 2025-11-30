@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Key, BookOpen, GlassWater, Utensils, X, RefreshCw, Sparkles, Moon, 
@@ -5,7 +6,7 @@ import {
   MessageSquare, Eye, RotateCcw, Gauge, Coins, Zap, Activity, 
   Terminal, Box, Radio, Signal, MessageCircle, User, BrainCircuit, ShoppingCart, Lock, Info, ArrowLeft,
   Droplets, AlertTriangle, Database, ClipboardList, CheckSquare, Gift, Wifi, Anchor, Power, Volume2, VolumeX, LogOut,
-  Wine
+  Wine, ShieldCheck, ScanEye, Unlock
 } from 'lucide-react';
 
 import { 
@@ -63,9 +64,11 @@ export default function HazaticBar() {
 
   // Conversation/Chatting State
   const [inquiries, setInquiries] = useState<Inquiry[] | null>(null);
-  const [currentChatResponse, setCurrentChatResponse] = useState<{answer: string, reward: number, stabilityChange?: number} | null>(null);
+  const [currentChatResponse, setCurrentChatResponse] = useState<{answer: string, reward: number, stabilityChange?: number, insightChange?: number} | null>(null);
   const [conversationHistory, setConversationHistory] = useState<string[]>([]);
-  const [connectionStability, setConnectionStability] = useState(50); // New: 0-100
+  const [connectionStability, setConnectionStability] = useState(50); // 0-100
+  const [insight, setInsight] = useState(0); // 0-100, New Insight Mechanic
+  const [hasInteractedTurn, setHasInteractedTurn] = useState(false); 
 
   const [showRadio, setShowRadio] = useState(false);
   const [radioContent, setRadioContent] = useState<string | null>(null);
@@ -251,7 +254,7 @@ export default function HazaticBar() {
       setTimeout(() => setNotification(null), 3000);
   };
 
-  const playUiSound = (type: 'click' | 'success' | 'error' = 'click') => {
+  const playUiSound = (type: 'click' | 'success' | 'error' | 'cheers' = 'click') => {
     try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) return;
@@ -285,6 +288,33 @@ export default function HazaticBar() {
             gain.gain.linearRampToValueAtTime(0, now + 0.2);
             osc.start(now);
             osc.stop(now + 0.2);
+        } else if (type === 'cheers') {
+            // Glass Clink Effect - High Metallic Ping
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, now);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.6);
+            
+            gain.gain.setValueAtTime(0.0, now);
+            gain.gain.linearRampToValueAtTime(0.3, now + 0.02); // Fast attack
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6); // Long decay
+            
+            osc.start(now);
+            osc.stop(now + 0.6);
+            
+            // Subtle overtone
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(2400, now);
+            gain2.gain.setValueAtTime(0.0, now);
+            gain2.gain.linearRampToValueAtTime(0.05, now + 0.02);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            
+            osc2.start(now);
+            osc2.stop(now + 0.3);
         }
     } catch (e) {
         // Audio context might be blocked
@@ -460,7 +490,8 @@ export default function HazaticBar() {
 
       setActiveCustomer(newCustomer);
     } catch (error) {
-      console.error(error);
+      console.warn("AI Generate Customer Failed (Offline Fallback)", error);
+      // Fallback if AI fails (e.g. Rate Limit)
       spawnRandomCustomer();
     } finally {
       setIsLoadingAI(false);
@@ -485,9 +516,11 @@ export default function HazaticBar() {
       return;
     }
 
-    // Reset Stability on new conversation, using anchor if purchased
+    // Reset Stability and Insight on new conversation
     setConnectionStability(upgrades.stabilityAnchor ? 80 : 50);
+    setInsight(0);
     setConversationHistory([]);
+    setHasInteractedTurn(false);
 
     setIsLoadingAI(true);
     try {
@@ -509,7 +542,7 @@ export default function HazaticBar() {
       setInquiries(result.questions?.map((q: any, i: number) => ({...q, id: i.toString()})) || []);
       setGameState('chatting');
     } catch (e) {
-      console.error(e);
+      console.warn("AI Chat Init Failed (Offline Fallback)", e);
       // Fallback Inquiries when API fails (Offline Mode)
       setInquiries([
         { id: 'fb1', text: "信号似乎不太好... (Signal Weak)", type: 'glitch' },
@@ -529,6 +562,7 @@ export default function HazaticBar() {
       return;
     }
 
+    setHasInteractedTurn(false); // New turn, reset interaction flag
     setIsLoadingAI(true);
     try {
       const prompt = `
@@ -536,23 +570,27 @@ export default function HazaticBar() {
         Rule: Use "HAZATIC BAR" as the name. Do not translate "HAZATIC" or "HAZATIC BAR" into Chinese.
         Role: Customer "${activeCustomer.name}" (Vibe: ${activeCustomer.vibe}).
         Player Question: "${inquiry.text}" (Type: ${inquiry.type}).
-        Conversation History: ${conversationHistory.join(' | ')}.
-        Current Neural Link Stability: ${connectionStability}%.
+        History: ${conversationHistory.join(' | ')}.
+        Stats: Stability ${connectionStability}%, Decryption/Insight ${insight}%.
         
         Mechanics:
-        - Stability represents the structural integrity of the customer's mind/avatar.
-        - "Risk" type or intrusive questions have a high chance of LOWERING stability (-10 to -20), but may reveal deeper lore.
-        - Empathetic/glitch-aligned questions might raise stability.
-        - If Stability is low (<30%), speech becomes glitchy/corrupted.
+        - Stability: Health. Drops with RISK questions. Low stability = glitchy speech.
+        - Insight: Progress. Increases with good questions (especially RISK).
+        - If Insight >= 100%: The customer's core truth is exposed.
         
         Task:
-        1. Answer the question in character (Simplified Chinese).
-        2. Determine stability change (-20 to +20).
-        3. Generate 2-3 follow-up options for the player (mix of approaches: Safe, Risky, Abstract).
+        1. Answer in character.
+        2. Calc stabilityChange (-20 to +10). Risk = -15, Personal = +5.
+        3. Calc insightChange (0 to +25). Risk = +20, Personal = +10.
+        4. Generate 3 distinct follow-up options:
+           - Option A (Deepen): Continue current topic.
+           - Option B (Pivot): Switch to a different topic/glitch.
+           - Option C (Escalate/Risk): A bold move to gain high insight but lose stability.
         
         Output JSON: { 
            "answer": "...", 
            "stabilityChange": number,
+           "insightChange": number,
            "reward": number (Data Fragments 10-50),
            "followUpQuestions": [ { "text": "...", "type": "glitch" | "lore" | "personal" | "risk" } ]
         }
@@ -560,15 +598,21 @@ export default function HazaticBar() {
 
       const result = await generateText(prompt, true);
       
-      // Update Stability
-      const change = result.stabilityChange || 0;
-      const newStability = Math.min(100, Math.max(0, connectionStability + change));
+      // Update Stats
+      const stabChange = result.stabilityChange || 0;
+      const insChange = result.insightChange || (inquiry.type === 'risk' ? 20 : 10);
+      
+      const newStability = Math.min(100, Math.max(0, connectionStability + stabChange));
+      const newInsight = Math.min(100, insight + insChange);
+      
       setConnectionStability(newStability);
+      setInsight(newInsight);
 
       setCurrentChatResponse({ 
         answer: result.answer, 
         reward: result.reward,
-        stabilityChange: change
+        stabilityChange: stabChange,
+        insightChange: insChange
       });
 
       const baseReward = result.reward || 0;
@@ -583,10 +627,16 @@ export default function HazaticBar() {
 
       setConversationHistory(prev => [...prev, `Q: ${inquiry.text} A: ${result.answer}`]);
       
-      // If disconnected
+      // Check End States
       if (newStability <= 0) {
         setInquiries([]);
         showNotification("连接已断开 (CONNECTION LOST)", 'error');
+      } else if (newInsight >= 100) {
+        setInquiries([]);
+        const bonus = 100;
+        setDataFragments(prev => prev + bonus);
+        showNotification("核心已解密! (CORE DECRYPTED +100MB)", 'success');
+        playUiSound('success');
       } else if (result.followUpQuestions && result.followUpQuestions.length > 0) {
         setInquiries(result.followUpQuestions.map((q: any, i: number) => ({...q, id: `f-${Date.now()}-${i}`})));
       } else {
@@ -594,18 +644,51 @@ export default function HazaticBar() {
       }
 
     } catch (e) {
-      // Fallback Response
+      console.warn("AI Chat Failed (Offline Fallback)", e);
       setCurrentChatResponse({ answer: "数据噪音掩盖了回答... (Data Noise)", reward: 0 });
+      updateMissionProgress('chat_count', 1);
     } finally {
       setIsLoadingAI(false);
     }
   };
 
+  // --- NEW ACTIONS ---
+  const handleStabilize = () => {
+      if (dataFragments < 20) {
+          showNotification("余额不足 (Insufficient Data)", 'error');
+          playUiSound('error');
+          return;
+      }
+      playUiSound('success');
+      setDataFragments(prev => prev - 20);
+      setConnectionStability(prev => Math.min(100, prev + 25)); // Restore 25%
+      setHasInteractedTurn(true);
+      showNotification("稳定性已修复 (Stability Restored)", 'success');
+  };
+
+  const handleDeepScan = () => {
+      playUiSound('click');
+      // Risk mechanic: 70% success rate
+      const success = Math.random() > 0.3; 
+      setHasInteractedTurn(true);
+      
+      if (success) {
+          const gain = 25;
+          setInsight(prev => Math.min(100, prev + gain));
+          showNotification(`深度扫描成功! 解析度 +${gain}%`, 'success');
+          playUiSound('success');
+      } else {
+          setConnectionStability(prev => Math.max(0, prev - 15));
+          showNotification("扫描触发防御机制! 稳定性下降 (Defense Triggered)", 'error');
+          playUiSound('error');
+      }
+  };
+
   const closeChatResponse = () => {
     playUiSound('click');
     setCurrentChatResponse(null);
-    if (connectionStability <= 0) {
-        // Force end chat if disconnected
+    if (connectionStability <= 0 || insight >= 100) {
+        // Force end chat if disconnected or completed
         setGameState('hub');
         setInquiries(null);
         setConversationHistory([]);
@@ -699,9 +782,15 @@ export default function HazaticBar() {
       setSessionLog(prev => [...prev, { customer: customer.name, drink: drink.name, score: finalData, abv: drink.abvLabel || 'N/A' }]);
       
     } catch (error) {
-      console.error("Eval Error", error);
+      console.warn("Eval Error (Offline Fallback)", error);
+      // Offline Fallback for Drink Evaluation
       setFeedback("客人默默地喝下了酒。");
+      
+      // Give offline rewards so progression isn't blocked
       setDataFragments(prev => prev + 15);
+      updateMissionProgress('serve_count', 1);
+      updateMissionProgress('earn_data', 15);
+      
       setLastDrinkSuccess(true);
       setDialogueOptions([
          { text: "感觉如何？", tip: 10, reply: "还好。" },
@@ -955,33 +1044,27 @@ export default function HazaticBar() {
 
   // --- SHOT MECHANIC ---
   const handleInviteShot = () => {
-    playUiSound('click');
+    playUiSound('cheers'); 
     setHasOfferedShot(true);
-
-    // Visual Trigger
     setShowCheersAnim(true);
-    setTimeout(() => setShowCheersAnim(false), 2000); // Allow time for animation
+    setTimeout(() => setShowCheersAnim(false), 2000); 
 
     let outcomeMsg = "";
     let bonusData = 0;
 
     if (lastDrinkSuccess) {
-        // Celebration Shot
         bonusData = 30;
-        playUiSound('success');
         outcomeMsg = "共饮成功！数据流更加顺畅了。 (Celebration: Sync Rate Up)";
         setConnectionStability(prev => Math.min(100, prev + 10));
     } else {
-        // Apology Shot
-        const accepted = Math.random() > 0.4; // 60% chance to accept
+        const accepted = Math.random() > 0.5; 
         if (accepted) {
             bonusData = 15;
-            playUiSound('success');
             outcomeMsg = "对方接受了赔罪。气氛缓和。 (Apology Accepted)";
             setConnectionStability(prev => Math.min(100, prev + 5));
         } else {
             bonusData = 0;
-            playUiSound('error');
+            setTimeout(() => playUiSound('error'), 600);
             outcomeMsg = "对方拒绝了。 (Request Denied)";
             setConnectionStability(prev => Math.max(0, prev - 10));
         }
@@ -989,12 +1072,10 @@ export default function HazaticBar() {
 
     setShotOutcome({ msg: outcomeMsg, bonus: bonusData });
 
-    // Apply Economy
     if (bonusData > 0) {
         const finalBonus = upgrades.doubleData ? bonusData * 2 : bonusData;
         setDataFragments(prev => prev + finalBonus);
         
-        // Update Tip in Log
         setSessionLog(prev => {
             const newLog = [...prev];
             if (newLog.length > 0) {
@@ -1022,9 +1103,9 @@ export default function HazaticBar() {
     setSelectedDrinkForAbv(null);
     setShowRadio(false); 
     setDreamPrompt(""); 
-    setConnectionStability(50); // Reset
+    setConnectionStability(50); 
+    setInsight(0);
     
-    // Reset Shot State
     setHasOfferedShot(false);
     setShotOutcome(null);
     
@@ -1093,7 +1174,6 @@ export default function HazaticBar() {
     playUiSound('success');
     setIsFadingOut(true);
 
-    // SAVE GAME before quitting
     saveGameData(dataFragments, unlockedIngredients, upgrades);
     
     setTimeout(() => {
@@ -1116,6 +1196,7 @@ export default function HazaticBar() {
       setCurrentChatResponse(null);
       setActiveMissions([]);
       setConnectionStability(50);
+      setInsight(0);
       setHasOfferedShot(false);
       setShotOutcome(null);
       
@@ -1125,8 +1206,6 @@ export default function HazaticBar() {
     }, 2000);
   };
 
-  // Render methods
-  
   if (gameState === 'intro') {
     const segment = STORY_SEGMENTS[storyIndex];
     return (
@@ -1217,8 +1296,6 @@ export default function HazaticBar() {
   }
 
   if (gameState === 'prep') {
-    const allPrepped = prepItems.ice && prepItems.bottles && prepItems.garnish;
-
     return (
       <BaseContainer glitchEffect={glitchEffect} isFadingOut={isFadingOut} isLoadingAI={isLoadingAI} notification={notification} className="flex flex-col items-center justify-center p-8">
          <div className="z-10 w-full max-w-2xl text-center">
@@ -1255,19 +1332,17 @@ export default function HazaticBar() {
             </div>
 
             <ArchitecturalButton 
-              disabled={!allPrepped}
+              disabled={!(prepItems.ice && prepItems.bottles && prepItems.garnish)}
               onClick={startBusiness}
-              variant={allPrepped ? "primary" : "disabled"}
+              variant={(prepItems.ice && prepItems.bottles && prepItems.garnish) ? "primary" : "disabled"}
               className="w-full py-4 text-base"
             >
-              {allPrepped ? "OPEN THE BAR" : "PENDING CHECKS..."}
+              {(prepItems.ice && prepItems.bottles && prepItems.garnish) ? "OPEN THE BAR" : "PENDING CHECKS..."}
             </ArchitecturalButton>
          </div>
       </BaseContainer>
     );
   }
-
-  // Report and Hub are standard...
   
   if (gameState === 'report') {
     const totalScore = sessionLog.reduce((acc, curr) => acc + curr.score + (curr.tip || 0), 0);
@@ -1360,10 +1435,6 @@ export default function HazaticBar() {
                   ))}
                </div>
             </div>
-
-            <p className="text-[10px] md:text-sm italic text-gray-500 mb-6 md:mb-10 text-center tracking-wider">
-              "今夜，这个街区的现实稳定度上升了 0.04%。感谢您的服务。"
-            </p>
 
             <ArchitecturalButton onClick={handleSaveAndQuit} className="w-full py-3 md:py-4 text-sm md:text-base">
               结束并保存 SAVE & QUIT
@@ -1508,16 +1579,33 @@ export default function HazaticBar() {
                 
                 {gameState === 'chatting' ? (
                    <div className="space-y-4 md:space-y-6 min-h-[150px] md:min-h-[200px] flex flex-col items-center justify-center">
-                      <div className="w-full px-4 mb-2">
-                          <div className="flex justify-between items-center text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                              <span className="flex items-center gap-1"><BrainCircuit size={12}/> Neural Link Stability</span>
-                              <span className={connectionStability < 30 ? 'text-red-500 animate-pulse' : 'text-gray-700'}>{connectionStability}%</span>
+                      <div className="w-full px-4 mb-2 space-y-2">
+                          {/* Stability Bar */}
+                          <div>
+                            <div className="flex justify-between items-center text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                                <span className="flex items-center gap-1"><BrainCircuit size={12}/> Neural Stability</span>
+                                <span className={connectionStability < 30 ? 'text-red-500 animate-pulse' : 'text-gray-700'}>{connectionStability}%</span>
+                            </div>
+                            <div className="w-full bg-gray-300/50 h-1.5 rounded-full overflow-hidden border border-gray-400/30">
+                               <div 
+                                 className={`h-full transition-all duration-700 ease-out ${connectionStability < 30 ? 'bg-red-500 shadow-[0_0_10px_red]' : connectionStability > 80 ? 'bg-blue-500' : 'bg-green-600'}`}
+                                 style={{ width: `${connectionStability}%` }}
+                               />
+                            </div>
                           </div>
-                          <div className="w-full bg-gray-300/50 h-1.5 rounded-full overflow-hidden border border-gray-400/30">
-                             <div 
-                               className={`h-full transition-all duration-700 ease-out ${connectionStability < 30 ? 'bg-red-500 shadow-[0_0_10px_red]' : connectionStability > 80 ? 'bg-blue-500' : 'bg-green-600'}`}
-                               style={{ width: `${connectionStability}%` }}
-                             />
+
+                          {/* Insight Bar */}
+                          <div>
+                            <div className="flex justify-between items-center text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                                <span className="flex items-center gap-1"><Unlock size={12}/> Data Decryption</span>
+                                <span className="text-cyan-700">{insight}%</span>
+                            </div>
+                            <div className="w-full bg-gray-300/50 h-1.5 rounded-full overflow-hidden border border-gray-400/30">
+                               <div 
+                                 className="h-full transition-all duration-700 ease-out bg-cyan-500 shadow-[0_0_5px_cyan]"
+                                 style={{ width: `${insight}%` }}
+                               />
+                            </div>
                           </div>
                       </div>
 
@@ -1528,7 +1616,7 @@ export default function HazaticBar() {
                         </div>
                       ) : currentChatResponse ? (
                         <div className="animate-fadeIn w-full">
-                           <div className={`p-4 md:p-6 rounded-sm border shadow-sm relative overflow-hidden group mb-4 md:mb-6 text-left transition-colors duration-500
+                           <div className={`p-4 md:p-6 rounded-sm border shadow-sm relative overflow-hidden group mb-4 text-left transition-colors duration-500
                                 ${currentChatResponse.stabilityChange && currentChatResponse.stabilityChange < 0 ? 'bg-red-50/80 border-red-200' : 'bg-[#f0f0f0]/90 border-white/60'}
                            `}>
                               <GlitchBorder />
@@ -1537,11 +1625,18 @@ export default function HazaticBar() {
                               </p>
                               
                               <div className="mt-4 flex justify-between items-end border-t border-gray-300/30 pt-3">
-                                   {currentChatResponse.stabilityChange !== 0 && (
-                                     <span className={`text-[10px] font-bold font-mono flex items-center gap-1 ${currentChatResponse.stabilityChange && currentChatResponse.stabilityChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        <Wifi size={10}/> STABILITY {currentChatResponse.stabilityChange && currentChatResponse.stabilityChange > 0 ? '+' : ''}{currentChatResponse.stabilityChange}%
-                                     </span>
-                                   )}
+                                   <div className="flex flex-col gap-1">
+                                     {currentChatResponse.stabilityChange !== 0 && (
+                                       <span className={`text-[10px] font-bold font-mono flex items-center gap-1 ${currentChatResponse.stabilityChange && currentChatResponse.stabilityChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          <Wifi size={10}/> STABILITY {currentChatResponse.stabilityChange && currentChatResponse.stabilityChange > 0 ? '+' : ''}{currentChatResponse.stabilityChange}%
+                                       </span>
+                                     )}
+                                     {currentChatResponse.insightChange !== 0 && (
+                                       <span className="text-[10px] font-bold font-mono flex items-center gap-1 text-cyan-600">
+                                          <Unlock size={10}/> INSIGHT +{currentChatResponse.insightChange}%
+                                       </span>
+                                     )}
+                                   </div>
                                    {currentChatResponse.reward > 0 && (
                                     <span className="text-[8px] md:text-[10px] bg-[#e0e0e0] px-2 py-1 rounded-sm text-gray-600 font-mono font-bold tracking-wider">
                                      +{upgrades.doubleData ? currentChatResponse.reward * 2 : currentChatResponse.reward} MB
@@ -1549,8 +1644,23 @@ export default function HazaticBar() {
                                    )}
                               </div>
                            </div>
+
+                           {/* INTERACTIVE ACTIONS */}
+                           <div className="flex gap-3 mb-4 justify-center">
+                              {connectionStability < 40 && !hasInteractedTurn && (
+                                <button onClick={handleStabilize} className="flex-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10px] py-2 px-3 rounded-sm font-bold flex items-center justify-center gap-1 transition-colors">
+                                   <ShieldCheck size={12}/> REPAIR LINK (-20MB)
+                                </button>
+                              )}
+                              {connectionStability > 60 && !hasInteractedTurn && (
+                                <button onClick={handleDeepScan} className="flex-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 text-[10px] py-2 px-3 rounded-sm font-bold flex items-center justify-center gap-1 transition-colors">
+                                   <ScanEye size={12}/> DEEP SCAN (RISK)
+                                </button>
+                              )}
+                           </div>
+
                            <ArchitecturalButton onClick={closeChatResponse} variant="secondary" className="w-full">
-                             继续链接 CONTINUE LINK
+                             {connectionStability <= 0 ? "断开连接 DISCONNECT" : "继续链接 CONTINUE EXCHANGE"}
                            </ArchitecturalButton>
                         </div>
                       ) : (
@@ -1566,7 +1676,8 @@ export default function HazaticBar() {
                                  <span className="font-medium tracking-wide pr-2">{q.text}</span>
                                  {q.type && (
                                    <span className={`text-[8px] uppercase tracking-wider font-bold ml-2 px-1.5 py-0.5 rounded-sm border ${
-                                       q.type === 'risk' || q.type === 'personal' ? 'text-red-500 border-red-200 bg-red-50' : 
+                                       q.type === 'risk' ? 'text-red-500 border-red-200 bg-red-50' : 
+                                       q.type === 'personal' ? 'text-purple-500 border-purple-200 bg-purple-50' : 
                                        q.type === 'glitch' ? 'text-blue-500 border-blue-200 bg-blue-50' : 
                                        'text-gray-400 border-gray-200 bg-gray-100'
                                    }`}>
@@ -1777,11 +1888,6 @@ export default function HazaticBar() {
 
       </main>
 
-      {/* FOOTER & OVERLAYS... (Keeping rest of the file intact, only showing relevant overlay logic above in BaseContainer) */}
-      
-      {/* ... [Overlays for Recipe, Shop, Mixing etc are same as previous] ... */}
-      
-      {/* ... (Include Recipe Book, Shop, Mixing Overlays here - they are unchanged logic wise, just rendered below) ... */}
       <div className="fixed bottom-0 left-0 w-full bg-[#d4d4d4]/90 backdrop-blur-md border-t border-white/40 shadow-lg z-30 pb-safe">
         <div className="max-w-xl mx-auto grid grid-cols-4 gap-2 p-2">
             <button 
@@ -1820,7 +1926,6 @@ export default function HazaticBar() {
         </div>
       </div>
 
-      {/* OVERLAYS */}
       {showRecipeBook && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4 md:p-6">
           <ArchitecturalCard className="w-full h-full md:h-[85vh] md:max-w-3xl flex flex-col p-0 overflow-hidden animate-fadeInUp">

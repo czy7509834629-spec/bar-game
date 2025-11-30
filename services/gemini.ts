@@ -19,7 +19,10 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 5, delay
       error?.response?.status === 429 ||
       error?.message?.includes('429') || 
       error?.message?.includes('quota') ||
-      error?.message?.includes('RESOURCE_EXHAUSTED');
+      error?.message?.includes('RESOURCE_EXHAUSTED') ||
+      // Checks for nested Google API error structure
+      error?.error?.code === 429 ||
+      error?.error?.status === 'RESOURCE_EXHAUSTED';
 
     if (retries > 0 && isRateLimit) {
       console.warn(`Rate limit hit. Retrying in ${delay}ms... (${retries} attempts left)`);
@@ -32,24 +35,19 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 5, delay
 
 export const generateText = async (prompt: string, isJSON: boolean = false) => {
   return retryOperation(async () => {
-    try {
-      const config = isJSON ? { responseMimeType: "application/json" } : undefined;
-      
-      // Using gemini-2.5-flash for text/JSON tasks
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: config
-      });
+    const config = isJSON ? { responseMimeType: "application/json" } : undefined;
+    
+    // Using gemini-2.5-flash for text/JSON tasks
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: config
+    });
 
-      const text = response.text;
-      if (!text) throw new Error("No content generated");
-      
-      return isJSON ? JSON.parse(text) : text;
-    } catch (error) {
-      console.error("AI Text Generation Failed:", error);
-      throw error;
-    }
+    const text = response.text;
+    if (!text) throw new Error("No content generated");
+    
+    return isJSON ? JSON.parse(text) : text;
   });
 };
 
@@ -82,7 +80,17 @@ export const generateImage = async (prompt: string): Promise<string | null> => {
       
       throw new Error("No image data found in response");
     } catch (error) {
-      console.error("AI Image Generation Failed:", error);
+      // Don't throw here inside the retry wrapper's inner block if we want to return null on hard failure
+      // But we want retry logic to catch 429s.
+      // If it's a 429, it will be caught by retryOperation.
+      // If it's another error, we log and return null to prevent app crash.
+      const isRateLimit = 
+        (error as any)?.status === 429 || 
+        (error as any)?.error?.code === 429;
+        
+      if (isRateLimit) throw error; // Let retry handle it
+      
+      console.warn("AI Image Generation Failed (Non-Retryable):", error);
       return null; 
     }
   });
